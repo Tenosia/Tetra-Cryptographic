@@ -1,7 +1,26 @@
 #ifndef HAVE_COMMON_H
 #define HAVE_COMMON_H
 
+#include <stdint.h>
 
+#if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && defined(__ORDER_BIG_ENDIAN__)
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#define TETRA_COMMON_IS_LE 1
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#define TETRA_COMMON_IS_LE 0
+#else
+#error "common.h: unsupported __BYTE_ORDER__"
+#endif
+#else
+#include <endian.h>
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+#define TETRA_COMMON_IS_LE 1
+#elif __BYTE_ORDER == __BIG_ENDIAN
+#define TETRA_COMMON_IS_LE 0
+#else
+#error "common.h: unsupported host byte order"
+#endif
+#endif
 
 #define rol32(x, n) ((x << n) | (x >> (32 - n)))
 
@@ -16,16 +35,22 @@
 
 #define BYTEN(x,n) (((x) >> (n * 8)) & 0xff)
 
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-#define be32(x) __builtin_bswap32(x)
-#define be16(x) __builtin_bswap16(x)
-#define le32(x) (x)
-#define le16(x) (x)
+#if TETRA_COMMON_IS_LE
+#define be32(x) __builtin_bswap32((uint32_t)(x))
+#define be16(x) __builtin_bswap16((uint16_t)(x))
+#define le32(x) ((uint32_t)(x))
+#define le16(x) ((uint16_t)(x))
 #else
-#define be32(x) (x)
-#define be16(x) (x)
-#define le32(x) __builtin_bswap32(x)
-#define le16(x) __builtin_bswap16(x)
+#define be32(x) ((uint32_t)(x))
+#define be16(x) ((uint16_t)(x))
+#define le32(x) __builtin_bswap32((uint32_t)(x))
+#define le16(x) __builtin_bswap16((uint16_t)(x))
+#endif
+
+#undef TETRA_COMMON_IS_LE
+
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 typedef struct {
@@ -37,6 +62,10 @@ typedef struct {
 } FrameNumbers;
 
 
-uint32_t build_iv(FrameNumbers *f);
+uint32_t build_iv(const FrameNumbers *f);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* HAVE_COMMON_H */

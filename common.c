@@ -17,7 +17,7 @@
 #include <assert.h>
 #include "common.h"
 
-uint32_t build_iv(FrameNumbers *f) {
+uint32_t build_iv(const FrameNumbers *f) {
     assert(1 <= f->tn  && f->tn  <= 4);
     assert(1 <= f->fn  && f->fn  <= 18);
     assert(1 <= f->mn  && f->mn  <= 60);

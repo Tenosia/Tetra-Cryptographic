@@ -332,7 +332,7 @@ void ta61_inv(uint8_t *lpKey, uint8_t *lpIdentity, uint8_t *lpDecIdentityOut) {
     ta61_inner_inv(abIntermediateKey, lpIdentity, lpDecIdentityOut);
 }
 
-void ta61_inner_inv(uint8_t *lpIntermediateKey, uint8_t *lpIdentity, uint8_t *lpDecIdentityOut) {
+void ta61_inner_inv(const uint8_t *lpIntermediateKey, uint8_t *lpIdentity, uint8_t *lpDecIdentityOut) {
     uint8_t abIdentity[3];
     abIdentity[0] = lpIdentity[0];
     abIdentity[1] = lpIdentity[1];

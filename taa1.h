@@ -3,9 +3,10 @@
 
 #include <inttypes.h>
 
-/*
- * transformation functions used by TAxx primitives
- */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void transform_80_to_120(const uint8_t *lpBuffer, uint8_t *lpBufferOut);
 void transform_80_to_128(const uint8_t *lpBuffer, uint8_t *lpBufferOut);
 void transform_80_to_120_alt(const uint8_t *lpBuffer, uint8_t *lpBufferOut);
@@ -16,10 +17,6 @@ void transform_120_to_80_alt(const uint8_t *lpBuffer, uint8_t *lpBufferOut);
 void transform_identity(const uint8_t *lpInput, uint8_t *lpOutput);
 void transform_identity_inverse(const uint8_t *lpInput, uint8_t *lpOutput);
 
-/*
- * TAxx primitives for authentication, key derivation and sealing functionality
- * (see ETSI EN 300 392-7)
- */
 void ta11_ta41(uint8_t *lpKeyK, uint8_t *lpChallengeRs, uint8_t *lpKsOut);
 void ta12_ta22(uint8_t *lpKeyKs, uint8_t *lpRand, uint8_t *lpResOut, uint8_t *lpDckOut);
 void ta21(uint8_t *lpKeyK, uint8_t *lpChallengeRs, uint8_t *lpKspOut);
@@ -35,19 +32,17 @@ void ta82(uint8_t *lpSealedGck, uint8_t *lpGckVn, uint8_t *lpKey, uint8_t *lpUns
 void ta91(uint8_t *lpUnsealedGsko, uint8_t *lpGskoVn, uint8_t *lpKey, uint8_t *lpSealedGskoOut);
 void ta92(uint8_t *lpSealedGsko, uint8_t *lpGskoVn, uint8_t *lpKey, uint8_t *lpUnsealedGskoOut, uint8_t *lpMfOut);
 
-/*
- * TA61 internals for use in cryptanalytical contexts
- */
 void ta61_compute_c(const uint8_t *lpKey, uint8_t *lpIntermediateKeyOut);
 void ta61_inner(const uint8_t *lpIntermediateKey, const uint8_t *lpIdentity, uint8_t *lpEncIdentityOut);
-void ta61_inner_inv(uint8_t *lpIntermediateKey, uint8_t *lpIdentity, uint8_t *lpDecIdentityOut);
+void ta61_inner_inv(const uint8_t *lpIntermediateKey, uint8_t *lpIdentity, uint8_t *lpDecIdentityOut);
 
-/*
- * TBxx non-cryptographic primitives also used for authentication and key derivation
- */
 void tb4(uint8_t *lpDck1, uint8_t *lpDck2, uint8_t *lpDckOut);
 void tb5(uint8_t *lpCn, uint8_t *lpLa, uint8_t *lpCc, uint8_t *lpCk, uint8_t *lpEckOut);
 void tb6(uint8_t *lpSck, uint8_t *lpCn, uint8_t *lpSsi, uint8_t *lpEckOut);
 void tb7(uint8_t *lpGsko, uint8_t *lpEgskoOut);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* HAVE_TAA1_H */

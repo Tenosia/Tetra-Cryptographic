@@ -83,7 +83,7 @@ static const uint32_t g_adwReorder[16] = {
 #endif
 
 
-void HURDLE_set_key_fw(uint8_t *k, HURDLE_CTX *lpContextOut) {
+void HURDLE_set_key_fw(const uint8_t *k, HURDLE_CTX *lpContextOut) {
 
     /*
      * This is the key schedule as recovered from the firmware, clearly showing
@@ -119,7 +119,7 @@ void HURDLE_set_key_fw(uint8_t *k, HURDLE_CTX *lpContextOut) {
     }
 }
 
-void HURDLE_set_key(uint8_t *k, HURDLE_CTX *lpContextOut) {
+void HURDLE_set_key(const uint8_t *k, HURDLE_CTX *lpContextOut) {
 
     // Simplified key schedule by precomputing rotates and xor constants
     uint8_t abKeyBytes[256] = {

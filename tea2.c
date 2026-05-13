@@ -41,7 +41,7 @@ const uint8_t g_abTea2Sbox[256] = {
 };
 
 
-static uint64_t tea2_expand_iv(uint32_t dwFrameNumbers) {
+uint64_t tea2_expand_iv(uint32_t dwFrameNumbers) {
     uint32_t dwXorred = dwFrameNumbers ^ 0x5A6E3278;
     dwXorred = (dwXorred << 8) | (dwXorred >> 24); // rotate left -> translated to single rol instruction
     uint64_t qwIv = ((uint64_t)dwFrameNumbers << 32) | dwXorred;
