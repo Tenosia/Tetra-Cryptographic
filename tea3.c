@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <stdio.h>
 #include <inttypes.h>
 #include <string.h>
 
+#include "common.h"
 #include "tea3.h"
-
 
 const uint16_t g_awTea3LutA[8] = { 0x92A7, 0xA761, 0x974C, 0x6B8C, 0x29CE, 0x176C, 0x39D4, 0x7463 };
 const uint16_t g_awTea3LutB[8] = { 0x9D58, 0xA46D, 0x176C, 0x79C4, 0xC62B, 0xB2C9, 0x4D93, 0x2E93 };
@@ -40,76 +39,76 @@ const uint8_t g_abTea3Sbox[256] = {
     0x52, 0x8C, 0x5D, 0x29, 0x6D, 0x04, 0xBC, 0x25, 0x15, 0x8B, 0x12, 0x9B, 0xD6, 0x75, 0xA3, 0x97
 };
 
-
-static uint64_t tea3_compute_iv(uint32_t dwFrameNumbers) {
-    uint32_t dwXorred = dwFrameNumbers ^ 0xC43A7D51;
-    dwXorred = (dwXorred << 8) | (dwXorred >> 24); // rotate left -> translated to single rol instruction
-    uint64_t qwIv = ((uint64_t)dwFrameNumbers << 32) | dwXorred;
-    return (qwIv >> 8) | (qwIv << 56); // rotate right
+static inline void tea3_shift_keyreg(uint8_t r[10], uint8_t in)
+{
+    r[0] = r[1];
+    r[1] = r[2];
+    r[2] = r[3];
+    r[3] = r[4];
+    r[4] = r[5];
+    r[5] = r[6];
+    r[6] = r[7];
+    r[7] = r[8];
+    r[8] = r[9];
+    r[9] = in;
 }
 
-static uint8_t tea3_state_word_to_newbyte(uint16_t wSt, const uint16_t *awLut) {
-    uint8_t bSt0 = wSt;
-    uint8_t bSt1 = wSt >> 8;
-
+static uint8_t tea3_state_word_to_newbyte(uint16_t wSt, const uint16_t *awLut)
+{
+    uint8_t bSt0 = (uint8_t)wSt;
+    uint8_t bSt1 = (uint8_t)(wSt >> 8);
     uint8_t bDist;
     uint8_t bOut = 0;
+    int i;
 
-    for (int i = 0; i < 8; i++) {
-        // taps on bit 5,6 for bSt0 and bit 5,6 for bSt1
-        bDist = ((bSt0 >> 5) & 3) | ((bSt1 >> 3) & 12);
-        if (awLut[i] & (1 << bDist)) {
-            bOut |= 1 << i;
+    for (i = 0; i < 8; i++) {
+        bDist = (uint8_t)(((bSt0 >> 5) & 3) | ((bSt1 >> 3) & 12));
+        if (awLut[i] & (uint16_t)(1u << bDist)) {
+            bOut |= (uint8_t)(1u << i);
         }
-
-        // rotate one position
-        bSt0 = ((bSt0 >> 1) | (bSt0 << 7));
-        bSt1 = ((bSt1 >> 1) | (bSt1 << 7));
+        bSt0 = (uint8_t)((bSt0 >> 1) | (bSt0 << 7));
+        bSt1 = (uint8_t)((bSt1 >> 1) | (bSt1 << 7));
     }
 
     return bOut;
 }
 
-static uint8_t tea3_reorder_state_byte(uint8_t bStByte) {
-    // simple re-ordering of bits
+static uint8_t tea3_reorder_state_byte(uint8_t bStByte)
+{
     uint8_t bOut = 0;
-    bOut |= ((bStByte << 6) & 0x40);
-    bOut |= ((bStByte << 1) & 0x20);
-    bOut |= ((bStByte << 2) & 0x98);
-    bOut |= ((bStByte >> 4) & 0x04);
-    bOut |= ((bStByte >> 3) & 0x01);
-    bOut |= ((bStByte >> 6) & 0x02);
+    bOut |= (uint8_t)((bStByte << 6) & 0x40);
+    bOut |= (uint8_t)((bStByte << 1) & 0x20);
+    bOut |= (uint8_t)((bStByte << 2) & 0x98);
+    bOut |= (uint8_t)((bStByte >> 4) & 0x04);
+    bOut |= (uint8_t)((bStByte >> 3) & 0x01);
+    bOut |= (uint8_t)((bStByte >> 6) & 0x02);
     return bOut;
 }
 
-void tea3(uint32_t dwFrameNumbers, uint8_t *lpKey, uint32_t dwNumKsBytes, uint8_t *lpKsOut) {
+void tea3(uint32_t dwFrameNumbers, uint8_t *lpKey, uint32_t dwNumKsBytes, uint8_t *lpKsOut)
+{
     uint8_t abKeyReg[10];
     uint32_t dwNumSkipRounds = 51;
+    uint64_t qwIvReg = tetra_expand_iv64(dwFrameNumbers, 0xC43A7D51u);
+    uint32_t i;
+    uint32_t j;
 
-    // init registers
-    uint64_t qwIvReg = tea3_compute_iv(dwFrameNumbers);
     memcpy(abKeyReg, lpKey, 10);
 
-    for (int i = 0; i < dwNumKsBytes; i++) {
-        for (int j = 0; j < dwNumSkipRounds; j++) {
-            // Step 1: Derive a non-linear feedback byte through sbox and feed back into key register
-            uint8_t bSboxOut = g_abTea3Sbox[abKeyReg[7] ^ abKeyReg[2]] ^ abKeyReg[0];
-            memmove(abKeyReg, abKeyReg + 1, 9);
-            abKeyReg[9] = bSboxOut;
+    for (i = 0; i < dwNumKsBytes; i++) {
+        for (j = 0; j < dwNumSkipRounds; j++) {
+            uint8_t bSboxOut = (uint8_t)(g_abTea3Sbox[abKeyReg[7] ^ abKeyReg[2]] ^ abKeyReg[0]);
+            tea3_shift_keyreg(abKeyReg, bSboxOut);
 
-            // Step 2: Compute 3 bytes derived from current state
-            uint8_t bDerivByte12 = tea3_state_word_to_newbyte((qwIvReg >>  8) & 0xffff, g_awTea3LutA);
-            uint8_t bDerivByte56 = tea3_state_word_to_newbyte((qwIvReg >> 40) & 0xffff, g_awTea3LutB);
-            uint8_t bReordByte4  = tea3_reorder_state_byte((qwIvReg >> 32) & 0xff);
-
-            // Step 3: Combine current state with state derived values, and xor in key derived sbox output
-            uint8_t bNewByte = ((qwIvReg >> 56) ^ bReordByte4 ^ bDerivByte12 ^ bSboxOut) & 0xff;
+            uint8_t bDerivByte12 = tea3_state_word_to_newbyte((uint16_t)((qwIvReg >> 8) & 0xffff), g_awTea3LutA);
+            uint8_t bDerivByte56 = tea3_state_word_to_newbyte((uint16_t)((qwIvReg >> 40) & 0xffff), g_awTea3LutB);
+            uint8_t bReordByte4  = tea3_reorder_state_byte((uint8_t)((qwIvReg >> 32) & 0xff));
+            uint8_t bNewByte = (uint8_t)(((qwIvReg >> 56) ^ bReordByte4 ^ bDerivByte12 ^ bSboxOut) & 0xff);
             uint8_t bMixByte = bDerivByte56;
 
-            // Step 4: Update lfsr: leftshift 8, feed/mix in previously generated bytes
             qwIvReg = ((qwIvReg << 8) ^ ((uint64_t)bMixByte << 40)) | bNewByte;
         }
-        lpKsOut[i] = (qwIvReg >> 56);
+        lpKsOut[i] = (uint8_t)(qwIvReg >> 56);
         dwNumSkipRounds = 19;
     }
 }

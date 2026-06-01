@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <stdio.h>
 #include <inttypes.h>
-#include <string.h>
 
+#include "common.h"
 #include "tea1.h"
 
 
@@ -40,11 +39,9 @@ const uint8_t g_abTea1Sbox[256] = {
     0x99, 0x43, 0x13, 0x0B, 0xE0, 0xA5, 0x12, 0x77, 0x5D, 0xB3, 0x38, 0xD9, 0xEF, 0x5A, 0x01, 0x70};
 
 
-uint64_t tea1_expand_iv(uint32_t dwShortIv) {
-    uint32_t dwXorred = dwShortIv ^ 0x96724FA1;
-    dwXorred = (dwXorred << 8) | (dwXorred >> 24); // rotate left -> translated to single rol instruction
-    uint64_t qwIv = ((uint64_t)dwShortIv << 32) | dwXorred;
-    return (qwIv >> 8) | (qwIv << 56); // rotate right
+uint64_t tea1_expand_iv(uint32_t dwShortIv)
+{
+    return tetra_expand_iv64(dwShortIv, 0x96724FA1u);
 }
 
 uint8_t tea1_state_word_to_newbyte(uint16_t wSt, const uint16_t *awLut) {
@@ -89,12 +86,14 @@ int32_t tea1_init_key_register(const uint8_t *lpKey) {
     return dwResult;
 }
 
-void tea1_inner(uint64_t qwIvReg, uint32_t dwKeyReg, uint32_t dwNumKsBytes, uint8_t *lpKsOut) {
-    
+void tea1_inner(uint64_t qwIvReg, uint32_t dwKeyReg, uint32_t dwNumKsBytes, uint8_t *lpKsOut)
+{
     uint32_t dwNumSkipRounds = 54;
+    uint32_t i;
+    uint32_t j;
 
-    for (int i = 0; i < dwNumKsBytes; i++) {
-        for (int j = 0; j < dwNumSkipRounds; j++) {
+    for (i = 0; i < dwNumKsBytes; i++) {
+        for (j = 0; j < dwNumSkipRounds; j++) {
             // Step 1: Derive a non-linear feedback byte through sbox and feed back into key register
             uint8_t bSboxOut = g_abTea1Sbox[((dwKeyReg >> 24) ^ dwKeyReg) & 0xff];
             dwKeyReg = (dwKeyReg << 8) | bSboxOut;
@@ -112,7 +111,7 @@ void tea1_inner(uint64_t qwIvReg, uint32_t dwKeyReg, uint32_t dwNumKsBytes, uint
             qwIvReg = ((qwIvReg << 8) ^ ((uint64_t)bMixByte << 32)) | bNewByte;
         }
 
-        lpKsOut[i] = (qwIvReg >> 56);
+        lpKsOut[i] = (uint8_t)(qwIvReg >> 56);
         dwNumSkipRounds = 19;
     }
 }

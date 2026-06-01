@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <stdio.h>
 #include <inttypes.h>
-#include <stdlib.h>
 
-#include "hurdle.h"
 #include "common.h"
+#include "hurdle.h"
 
 const uint8_t g_abHurdleSbox[256] = {
     0xF4, 0x65, 0x01, 0x00, 0xBA, 0x7A, 0xA7, 0x47, 0x98, 0xDD, 0x9D, 0xAD, 0x96, 0x5D, 0xAA, 0x3D, 
@@ -66,7 +64,7 @@ static const uint8_t g_abRoundConstant[16] = {
     0x3C, 0xA7, 0xEC, 0x25, 0x79, 0x57, 0xDF, 0xC0, 0x38, 0x0A, 0x33, 0x1E, 0xF3, 0x8C, 0xF4, 0xF7,
 };
 
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#if TETRA_HOST_LITTLE_ENDIAN
 static const uint32_t g_adwReorder[16] = {
     0x00000000, 0x80000000, 0x00800000, 0x80800000,
     0x00008000, 0x80008000, 0x00808000, 0x80808000,
@@ -119,28 +117,27 @@ void HURDLE_set_key_fw(const uint8_t *k, HURDLE_CTX *lpContextOut) {
     }
 }
 
-void HURDLE_set_key(const uint8_t *k, HURDLE_CTX *lpContextOut) {
+static const uint8_t g_abHurdleKeyIdx[256] = {
+     0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+     5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  0,  1,  2,  3,  4,
+    10, 11, 12, 13, 14, 15,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+    15,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+     4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  0,  1,  2,  3,
+     7,  8,  9, 10, 11, 12, 13, 14, 15,  0,  1,  2,  3,  4,  5,  6,
+    14, 15,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13,
+     3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  0,  1,  2,
+     8,  9, 10, 11, 12, 13, 14, 15,  0,  1,  2,  3,  4,  5,  6,  7,
+    13, 14, 15,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12,
+     2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  0,  1,
+     9, 10, 11, 12, 13, 14, 15,  0,  1,  2,  3,  4,  5,  6,  7,  8,
+    12, 13, 14, 15,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11,
+     1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  0,
+     6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  0,  1,  2,  3,  4,  5,
+    11, 12, 13, 14, 15,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10
+};
 
-    // Simplified key schedule by precomputing rotates and xor constants
-    uint8_t abKeyBytes[256] = {
-        /*  0      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15
-        |-------- UNUSED --------|                                                          |------ BARELY USED -----|   */
-        k[ 0], k[ 1], k[ 2], k[ 3], k[ 4], k[ 5], k[ 6], k[ 7], k[ 8], k[ 9], k[10], k[11], k[12], k[13], k[14], k[15], 
-        k[ 5], k[ 6], k[ 7], k[ 8], k[ 9], k[10], k[11], k[12], k[13], k[14], k[15], k[ 0], k[ 1], k[ 2], k[ 3], k[ 4], 
-        k[10], k[11], k[12], k[13], k[14], k[15], k[ 0], k[ 1], k[ 2], k[ 3], k[ 4], k[ 5], k[ 6], k[ 7], k[ 8], k[ 9], 
-        k[15], k[ 0], k[ 1], k[ 2], k[ 3], k[ 4], k[ 5], k[ 6], k[ 7], k[ 8], k[ 9], k[10], k[11], k[12], k[13], k[14], 
-        k[ 4], k[ 5], k[ 6], k[ 7], k[ 8], k[ 9], k[10], k[11], k[12], k[13], k[14], k[15], k[ 0], k[ 1], k[ 2], k[ 3], 
-        k[ 7], k[ 8], k[ 9], k[10], k[11], k[12], k[13], k[14], k[15], k[ 0], k[ 1], k[ 2], k[ 3], k[ 4], k[ 5], k[ 6], 
-        k[14], k[15], k[ 0], k[ 1], k[ 2], k[ 3], k[ 4], k[ 5], k[ 6], k[ 7], k[ 8], k[ 9], k[10], k[11], k[12], k[13], 
-        k[ 3], k[ 4], k[ 5], k[ 6], k[ 7], k[ 8], k[ 9], k[10], k[11], k[12], k[13], k[14], k[15], k[ 0], k[ 1], k[ 2], 
-        k[ 8], k[ 9], k[10], k[11], k[12], k[13], k[14], k[15], k[ 0], k[ 1], k[ 2], k[ 3], k[ 4], k[ 5], k[ 6], k[ 7], 
-        k[13], k[14], k[15], k[ 0], k[ 1], k[ 2], k[ 3], k[ 4], k[ 5], k[ 6], k[ 7], k[ 8], k[ 9], k[10], k[11], k[12], 
-        k[ 2], k[ 3], k[ 4], k[ 5], k[ 6], k[ 7], k[ 8], k[ 9], k[10], k[11], k[12], k[13], k[14], k[15], k[ 0], k[ 1], 
-        k[ 9], k[10], k[11], k[12], k[13], k[14], k[15], k[ 0], k[ 1], k[ 2], k[ 3], k[ 4], k[ 5], k[ 6], k[ 7], k[ 8], 
-        k[12], k[13], k[14], k[15], k[ 0], k[ 1], k[ 2], k[ 3], k[ 4], k[ 5], k[ 6], k[ 7], k[ 8], k[ 9], k[10], k[11], 
-        k[ 1], k[ 2], k[ 3], k[ 4], k[ 5], k[ 6], k[ 7], k[ 8], k[ 9], k[10], k[11], k[12], k[13], k[14], k[15], k[ 0], 
-        k[ 6], k[ 7], k[ 8], k[ 9], k[10], k[11], k[12], k[13], k[14], k[15], k[ 0], k[ 1], k[ 2], k[ 3], k[ 4], k[ 5], 
-        k[11], k[12], k[13], k[14], k[15], k[ 0], k[ 1], k[ 2], k[ 3], k[ 4], k[ 5], k[ 6], k[ 7], k[ 8], k[ 9], k[10]}; 
+void HURDLE_set_key(const uint8_t *k, HURDLE_CTX *lpContextOut)
+{
     static const uint8_t abKeyXorConsts[256] = {
         // 0      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15
         0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x00,   // rk00
@@ -160,18 +157,10 @@ void HURDLE_set_key(const uint8_t *k, HURDLE_CTX *lpContextOut) {
         0xC1,  0x33,  0xB4,  0xFE,  0xC4,  0x22,  0x54,  0x60,  0xD1,  0x8E,  0x6B,  0x78,  0x2C,  0x1D,  0x73,  0x64,   // rk14
         0x1E,  0xF3,  0x8C,  0xF4,  0xF7,  0x3C,  0xA7,  0xEC,  0x25,  0x79,  0x57,  0xDF,  0xC0,  0x38,  0x0A,  0x33};  // rk15
 
-    // Xor original key byte with round- and offset-specific xor byte
-    for (int i = 0; i < 256; i++) {
-        lpContextOut->abRoundKeys[i] = abKeyBytes[i] ^ abKeyXorConsts[i];
+    int i;
+    for (i = 0; i < 256; i++) {
+        lpContextOut->abRoundKeys[i] = k[g_abHurdleKeyIdx[i]] ^ abKeyXorConsts[i];
     }
-
-    // The first four bytes of each round key are not used and can be zeroed if desired
-    // for (int i = 0; i < 16; i++) {
-    //     lpContextOut->abRoundKeys[i*16] = 0;
-    //     lpContextOut->abRoundKeys[i*16+1] = 0;
-    //     lpContextOut->abRoundKeys[i*16+2] = 0;
-    //     lpContextOut->abRoundKeys[i*16+3] = 0;
-    // }
 }
 
 void HURDLE_f(uint8_t abOutput[4], const uint8_t abRhs[4], const uint8_t *lpRoundKey) {

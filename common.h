@@ -22,7 +22,20 @@
 #endif
 #endif
 
-#define rol32(x, n) ((x << n) | (x >> (32 - n)))
+#define TETRA_ROTL32(x, n) \
+    (((uint32_t)(x) << (n)) | ((uint32_t)(x) >> (32 - (n))))
+#define TETRA_ROTR64(x, n) \
+    (((uint64_t)(x) >> (n)) | ((uint64_t)(x) << (64 - (n))))
+
+#define rol32(x, n) TETRA_ROTL32(x, n)
+
+static inline uint64_t tetra_expand_iv64(uint32_t iv, uint32_t xor_const)
+{
+    uint32_t x = iv ^ xor_const;
+    x = TETRA_ROTL32(x, 8);
+    uint64_t qw = ((uint64_t)iv << 32) | x;
+    return TETRA_ROTR64(qw, 8);
+}
 
 #define BYTE0(x) ((x) & 0xff)
 #define BYTE1(x) (((x) >> 8) & 0xff)
@@ -47,6 +60,7 @@
 #define le16(x) __builtin_bswap16((uint16_t)(x))
 #endif
 
+#define TETRA_HOST_LITTLE_ENDIAN TETRA_COMMON_IS_LE
 #undef TETRA_COMMON_IS_LE
 
 #ifdef __cplusplus
@@ -63,6 +77,9 @@ typedef struct {
 
 
 uint32_t build_iv(const FrameNumbers *f);
+
+/* Decode even-length hex into buf; returns byte count or -1 on error. */
+int tetra_hex_decode(const char *hex, uint8_t *buf, unsigned buf_cap);
 
 #ifdef __cplusplus
 }
