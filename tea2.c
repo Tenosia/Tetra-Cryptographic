@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <inttypes.h>
 #include <string.h>
 
 #include "common.h"
 #include "tea2.h"
 
-const uint16_t g_abTea2LutA[8] = { 0x2579, 0x86E5, 0xB6C8, 0x31D6, 0x7394, 0x934D, 0x638E, 0xC68B };
-const uint16_t g_abTea2LutB[8] = { 0xD68A, 0x97A1, 0xB2C9, 0x239E, 0x9C71, 0x36E8, 0xC9B2, 0x6CD1 };
+#define TEA2_IV_XOR 0x5A6E3278u
+
+const uint16_t g_awTea2LutA[8] = { 0x2579, 0x86E5, 0xB6C8, 0x31D6, 0x7394, 0x934D, 0x638E, 0xC68B };
+const uint16_t g_awTea2LutB[8] = { 0xD68A, 0x97A1, 0xB2C9, 0x239E, 0x9C71, 0x36E8, 0xC9B2, 0x6CD1 };
 const uint8_t g_abTea2Sbox[256] = {
     0x62, 0xDA, 0xFD, 0xB6, 0xBB, 0x9C, 0xD8, 0x2A, 0xAB, 0x28, 0x6E, 0x42, 0xE7, 0x1C, 0x78, 0x9E,
     0xFC, 0xCA, 0x81, 0x8E, 0x32, 0x3B, 0xB4, 0xEF, 0x9F, 0x8B, 0xDB, 0x94, 0x0F, 0x9A, 0xA2, 0x96,
@@ -53,21 +54,16 @@ static inline void tea2_shift_keyreg(uint8_t r[10], uint8_t in)
     r[9] = in;
 }
 
-uint64_t tea2_expand_iv(uint32_t dwFrameNumbers)
-{
-    return tetra_expand_iv64(dwFrameNumbers, 0x5A6E3278u);
-}
-
 static uint8_t tea2_state_word_to_newbyte(uint16_t wSt, const uint16_t *awLut)
 {
     uint8_t bSt0 = (uint8_t)wSt;
     uint8_t bSt1 = (uint8_t)(wSt >> 8);
-    uint8_t bDist;
     uint8_t bOut = 0;
     int i;
 
     for (i = 0; i < 8; i++) {
-        bDist = ((bSt0 >> 1) & 0x1) | ((bSt0 >> 1) & 0x2) | ((bSt1 >> 5) & 0x4) | ((bSt1 << 3) & 0x8);
+        uint8_t bDist = (uint8_t)(((bSt0 >> 1) & 0x1) | ((bSt0 >> 1) & 0x2)
+                                | ((bSt1 >> 5) & 0x4) | ((bSt1 << 3) & 0x8));
         if (awLut[i] & (uint16_t)(1u << bDist)) {
             bOut |= (uint8_t)(1u << i);
         }
@@ -92,31 +88,48 @@ static uint8_t tea2_reorder_state_byte(uint8_t bStByte)
     return bOut;
 }
 
-void tea2(uint32_t dwFrameNumbers, uint8_t *lpKey, uint32_t dwNumKsBytes, uint8_t *lpKsOut)
+uint64_t tea2_expand_iv(uint32_t dwFrameNumbers)
 {
-    uint8_t abKeyReg[10];
-    uint32_t dwNumSkipRounds = 51;
-    uint64_t qwIvReg = tea2_expand_iv(dwFrameNumbers);
+    return tetra_expand_iv64(dwFrameNumbers, TEA2_IV_XOR);
+}
+
+void tea2_inner(uint64_t qwIvReg, uint8_t abKeyReg[10], uint32_t dwNumKsBytes, uint8_t *lpKsOut)
+{
+    uint32_t dwNumSkipRounds = TEA2_INITIAL_SKIP_ROUNDS;
     uint32_t i;
     uint32_t j;
-
-    memcpy(abKeyReg, lpKey, 10);
 
     for (i = 0; i < dwNumKsBytes; i++) {
         for (j = 0; j < dwNumSkipRounds; j++) {
             uint8_t bSboxOut = g_abTea2Sbox[abKeyReg[0] ^ abKeyReg[7]];
+            uint8_t bDerivByte01;
+            uint8_t bDerivByte34;
+            uint8_t bReordByte5;
+            uint8_t bNewByte;
+            uint8_t bMixByte;
+
             tea2_shift_keyreg(abKeyReg, bSboxOut);
 
-            uint8_t bDerivByte01 = tea2_state_word_to_newbyte((uint16_t)(qwIvReg & 0xffff), g_abTea2LutA);
-            uint8_t bDerivByte34 = tea2_state_word_to_newbyte((uint16_t)((qwIvReg >> 24) & 0xffff), g_abTea2LutB);
-            uint8_t bReordByte5  = tea2_reorder_state_byte((uint8_t)((qwIvReg >> 40) & 0xff));
-            uint8_t bNewByte = (uint8_t)(((qwIvReg >> 56) ^ (qwIvReg >> 16) ^ bReordByte5 ^ bDerivByte01 ^ bSboxOut) & 0xff);
-            uint8_t bMixByte = bDerivByte34;
+            bDerivByte01 = tea2_state_word_to_newbyte((uint16_t)(qwIvReg & 0xffff), g_awTea2LutA);
+            bDerivByte34 = tea2_state_word_to_newbyte((uint16_t)((qwIvReg >> 24) & 0xffff), g_awTea2LutB);
+            bReordByte5  = tea2_reorder_state_byte((uint8_t)((qwIvReg >> 40) & 0xff));
+
+            bNewByte = (uint8_t)(((qwIvReg >> 56) ^ (qwIvReg >> 16) ^ bReordByte5 ^ bDerivByte01 ^ bSboxOut) & 0xff);
+            bMixByte = bDerivByte34;
 
             qwIvReg = ((qwIvReg << 8) ^ ((uint64_t)bMixByte << 24)) | bNewByte;
         }
 
         lpKsOut[i] = (uint8_t)(qwIvReg >> 56);
-        dwNumSkipRounds = 19;
+        dwNumSkipRounds = TEA2_OUTPUT_SKIP_ROUNDS;
     }
+}
+
+void tea2(uint32_t dwFrameNumbers, const uint8_t *lpKey, uint32_t dwNumKsBytes, uint8_t *lpKsOut)
+{
+    uint8_t abKeyReg[10];
+    uint64_t qwIvReg = tea2_expand_iv(dwFrameNumbers);
+
+    memcpy(abKeyReg, lpKey, 10);
+    tea2_inner(qwIvReg, abKeyReg, dwNumKsBytes, lpKsOut);
 }

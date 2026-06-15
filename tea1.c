@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <inttypes.h>
-
 #include "common.h"
 #include "tea1.h"
 
+#define TEA1_IV_XOR 0x96724FA1u
 
 const uint16_t g_awTea1LutA[8] = { 0xDA86, 0x85E9, 0x29B5, 0x2BC6, 0x8C6B, 0x974C, 0xC671, 0x93E2 };
 const uint16_t g_awTea1LutB[8] = { 0x85D6, 0x791A, 0xE985, 0xC671, 0x2B9C, 0xEC92, 0xC62B, 0x9C47 };
@@ -36,92 +35,94 @@ const uint8_t g_abTea1Sbox[256] = {
     0xC7, 0xBC, 0x86, 0xDB, 0x84, 0xE8, 0xD1, 0xF7, 0x16, 0x21, 0x6E, 0xE5, 0xCB, 0xA3, 0x1A, 0xEC,
     0xA2, 0x7D, 0x18, 0x85, 0x48, 0xDA, 0xAA, 0xF0, 0x08, 0xC6, 0x40, 0xAD, 0x57, 0x0D, 0x29, 0x82,
     0x7C, 0xE9, 0x8C, 0xFE, 0xDC, 0x0F, 0x2D, 0x3C, 0x2E, 0xF6, 0x15, 0x2F, 0xAF, 0xE1, 0xEB, 0x3F,
-    0x99, 0x43, 0x13, 0x0B, 0xE0, 0xA5, 0x12, 0x77, 0x5D, 0xB3, 0x38, 0xD9, 0xEF, 0x5A, 0x01, 0x70};
-
+    0x99, 0x43, 0x13, 0x0B, 0xE0, 0xA5, 0x12, 0x77, 0x5D, 0xB3, 0x38, 0xD9, 0xEF, 0x5A, 0x01, 0x70
+};
 
 uint64_t tea1_expand_iv(uint32_t dwShortIv)
 {
-    return tetra_expand_iv64(dwShortIv, 0x96724FA1u);
+    return tetra_expand_iv64(dwShortIv, TEA1_IV_XOR);
 }
 
-uint8_t tea1_state_word_to_newbyte(uint16_t wSt, const uint16_t *awLut) {
-    uint8_t bSt0 = wSt;
-    uint8_t bSt1 = wSt >> 8;
-    uint8_t bDist;
+uint8_t tea1_state_word_to_newbyte(uint16_t wSt, const uint16_t *awLut)
+{
+    uint8_t bSt0 = (uint8_t)wSt;
+    uint8_t bSt1 = (uint8_t)(wSt >> 8);
     uint8_t bOut = 0;
+    int i;
 
-    for (int i = 0; i < 8; i++) {
-        // taps on bit 7,0 for bSt0 and bit 1,2 for bSt1
-        bDist = ((bSt0 >> 7) & 1) | ((bSt0 << 1) & 2) | ((bSt1 << 1) & 12);
-        if (awLut[i] & (1 << bDist)) {
-            bOut |= 1 << i;
+    for (i = 0; i < 8; i++) {
+        uint8_t bDist = (uint8_t)(((bSt0 >> 7) & 1) | ((bSt0 << 1) & 2) | ((bSt1 << 1) & 12));
+        if (awLut[i] & (uint16_t)(1u << bDist)) {
+            bOut |= (uint8_t)(1u << i);
         }
-
-        // rotate one position
-        bSt0 = ((bSt0 >> 1) | (bSt0 << 7));
-        bSt1 = ((bSt1 >> 1) | (bSt1 << 7));
+        bSt0 = (uint8_t)((bSt0 >> 1) | (bSt0 << 7));
+        bSt1 = (uint8_t)((bSt1 >> 1) | (bSt1 << 7));
     }
 
     return bOut;
 }
 
-uint8_t tea1_reorder_state_byte(uint8_t bStByte) {
-    // simple re-ordering of bits
+uint8_t tea1_reorder_state_byte(uint8_t bStByte)
+{
     uint8_t bOut = 0;
-    bOut |= ((bStByte << 6) & 0x40);
-    bOut |= ((bStByte << 1) & 0x20);
-    bOut |= ((bStByte << 2) & 0x08);
-    bOut |= ((bStByte >> 3) & 0x14);
-    bOut |= ((bStByte >> 2) & 0x01);
-    bOut |= ((bStByte >> 5) & 0x02);
-    bOut |= ((bStByte << 4) & 0x80);
+    bOut |= (uint8_t)((bStByte << 6) & 0x40);
+    bOut |= (uint8_t)((bStByte << 1) & 0x20);
+    bOut |= (uint8_t)((bStByte << 2) & 0x08);
+    bOut |= (uint8_t)((bStByte >> 3) & 0x14);
+    bOut |= (uint8_t)((bStByte >> 2) & 0x01);
+    bOut |= (uint8_t)((bStByte >> 5) & 0x02);
+    bOut |= (uint8_t)((bStByte << 4) & 0x80);
     return bOut;
 }
 
-int32_t tea1_init_key_register(const uint8_t *lpKey) {
-    int32_t dwResult = 0;
-    for (int i = 0; i < 10; i++) {
-        dwResult = (dwResult << 8) | g_abTea1Sbox[((dwResult >> 24) ^ lpKey[i] ^ dwResult) & 0xff];
+uint32_t tea1_init_key_register(const uint8_t *lpKey)
+{
+    uint32_t dwResult = 0;
+    int i;
+
+    for (i = 0; i < 10; i++) {
+        uint8_t idx = (uint8_t)(((dwResult >> 24) ^ lpKey[i] ^ dwResult) & 0xff);
+        dwResult = (dwResult << 8) | g_abTea1Sbox[idx];
     }
     return dwResult;
 }
 
 void tea1_inner(uint64_t qwIvReg, uint32_t dwKeyReg, uint32_t dwNumKsBytes, uint8_t *lpKsOut)
 {
-    uint32_t dwNumSkipRounds = 54;
+    uint32_t dwNumSkipRounds = TEA1_INITIAL_SKIP_ROUNDS;
     uint32_t i;
     uint32_t j;
 
     for (i = 0; i < dwNumKsBytes; i++) {
         for (j = 0; j < dwNumSkipRounds; j++) {
-            // Step 1: Derive a non-linear feedback byte through sbox and feed back into key register
             uint8_t bSboxOut = g_abTea1Sbox[((dwKeyReg >> 24) ^ dwKeyReg) & 0xff];
+            uint8_t bDerivByte12;
+            uint8_t bDerivByte56;
+            uint8_t bReordByte4;
+            uint8_t bNewByte;
+            uint8_t bMixByte;
+
             dwKeyReg = (dwKeyReg << 8) | bSboxOut;
 
-            // Step 2: Compute 3 bytes derived from current state
-            uint8_t bDerivByte12 = tea1_state_word_to_newbyte((qwIvReg >>  8) & 0xffff, g_awTea1LutA);
-            uint8_t bDerivByte56 = tea1_state_word_to_newbyte((qwIvReg >> 40) & 0xffff, g_awTea1LutB);
-            uint8_t bReordByte4  = tea1_reorder_state_byte((qwIvReg >> 32) & 0xff);
+            bDerivByte12 = tea1_state_word_to_newbyte((uint16_t)((qwIvReg >> 8) & 0xffff), g_awTea1LutA);
+            bDerivByte56 = tea1_state_word_to_newbyte((uint16_t)((qwIvReg >> 40) & 0xffff), g_awTea1LutB);
+            bReordByte4  = tea1_reorder_state_byte((uint8_t)((qwIvReg >> 32) & 0xff));
 
-            // Step 3: Combine current state with state derived values, and xor in key derived sbox output
-            uint8_t bNewByte = (bDerivByte56 ^ (qwIvReg >> 56) ^ bReordByte4 ^ bSboxOut) & 0xff;
-            uint8_t bMixByte = bDerivByte12;
+            bNewByte = (uint8_t)((bDerivByte56 ^ (qwIvReg >> 56) ^ bReordByte4 ^ bSboxOut) & 0xff);
+            bMixByte = bDerivByte12;
 
-            // Step 4: Update lfsr: leftshift 8, feed/mix in previously generated bytes
             qwIvReg = ((qwIvReg << 8) ^ ((uint64_t)bMixByte << 32)) | bNewByte;
         }
 
         lpKsOut[i] = (uint8_t)(qwIvReg >> 56);
-        dwNumSkipRounds = 19;
+        dwNumSkipRounds = TEA1_OUTPUT_SKIP_ROUNDS;
     }
 }
 
-void tea1(uint32_t dwFrameNumbers, const uint8_t *lpKey, uint32_t dwNumKsBytes, uint8_t *lpKsOut) {
-    
-    // Initialize IV and key register
+void tea1(uint32_t dwFrameNumbers, const uint8_t *lpKey, uint32_t dwNumKsBytes, uint8_t *lpKsOut)
+{
     uint64_t qwIvReg = tea1_expand_iv(dwFrameNumbers);
     uint32_t dwKeyReg = tea1_init_key_register(lpKey);
 
-    // Invoke actual TEA1 core function
     tea1_inner(qwIvReg, dwKeyReg, dwNumKsBytes, lpKsOut);
 }
