@@ -13,19 +13,38 @@
 // limitations under the License.
 
 #include <assert.h>
-#include <ctype.h>
 #include <string.h>
 
 #include "common.h"
 
+int frame_numbers_valid(const FrameNumbers *f)
+{
+    if (!f) {
+        return 0;
+    }
+    if (f->tn < TETRA_TN_MIN || f->tn > TETRA_TN_MAX) {
+        return 0;
+    }
+    if (f->fn < TETRA_FN_MIN || f->fn > TETRA_FN_MAX) {
+        return 0;
+    }
+    if (f->mn < TETRA_MN_MIN || f->mn > TETRA_MN_MAX) {
+        return 0;
+    }
+    if (f->dir > TETRA_DIR_UPLINK) {
+        return 0;
+    }
+    return 1;
+}
+
 uint32_t build_iv(const FrameNumbers *f)
 {
 #ifndef NDEBUG
-    assert(1 <= f->tn  && f->tn  <= 4);
-    assert(1 <= f->fn  && f->fn  <= 18);
-    assert(1 <= f->mn  && f->mn  <= 60);
-    assert(0 <= f->hn  && f->hn  <= 0xFFFF);
-    assert(0 <= f->dir && f->dir <= 1);
+    assert(frame_numbers_valid(f));
+#else
+    if (!frame_numbers_valid(f)) {
+        return 0;
+    }
 #endif
     return ((uint32_t)(f->tn - 1)
             | ((uint32_t)f->fn << 2)
@@ -52,7 +71,8 @@ int tetra_hex_decode(const char *hex, uint8_t *buf, unsigned buf_cap)
 {
     size_t len;
     unsigned i;
-    int hi, lo;
+    int hi;
+    int lo;
 
     if (!hex || !buf) {
         return -1;
